@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime, timedelta
 import urllib.parse
 from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
 
 # Database connection configuration
 DB_CONFIG = {
@@ -64,6 +65,14 @@ async def lifespan(app: FastAPI):
     janitor_task.cancel()
 
 app = FastAPI(title="Campus Canteen Warzone Engine", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows your local HTML file to communicate directly
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Helper to manage async database connections
 async def get_db():
@@ -129,8 +138,8 @@ async def checkout(request: CheckoutRequest, conn=Depends(get_db)):
                 order_id, item_id, qty
             )
 
-        canteen_upi = "canteen@upi"
-        payee_name = "Campus Canteen"
+        canteen_upi = "9947953343@slc"
+        payee_name = "Rojith Jinenth"
         transaction_note = f"Order-{order_id}"
         
         upi_params = {
