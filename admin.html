@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canteen Admin | Clear Pipeline</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+
+    <nav class="bg-slate-950 border-b border-slate-800 px-4 py-4 sticky top-0 z-50">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <h1 class="text-lg font-bold tracking-tight text-amber-400">STAFF<span>.PANEL</span></h1>
+            <span class="bg-red-500/10 border border-red-500/20 text-red-400 px-2.5 py-0.5 rounded-md text-xs font-mono font-bold animate-pulse">
+                🔴 COUNTER CONSOLE
+            </span>
+        </div>
+    </nav>
+
+    <main class="max-w-md mx-auto px-4 mt-6 space-y-6">
+        
+        <section class="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Scan Token Entry</h2>
+                <p class="text-xs text-slate-500">Simulates physical QR code hardware input decode</p>
+            </div>
+            
+            <div class="flex gap-2">
+                <input type="number" id="scan-input" placeholder="Enter Order ID (e.g. 3)" 
+                    class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-amber-500 w-full font-mono font-bold text-lg">
+                <button onclick="fetchOrderDetails()" 
+                    class="bg-amber-400 hover:bg-amber-500 active:scale-95 transition-transform text-slate-950 font-bold px-6 rounded-xl text-sm whitespace-nowrap">
+                    Fetch Order
+                </button>
+            </div>
+        </section>
+
+        <section id="order-display" class="hidden space-y-4">
+            </section>
+
+    </main>
+
+    <script>
+        // Use the EXACT same Wi-Fi IP address you looked up earlier for your ThinkPad!
+        const API_BASE = "http://192.168.1.35:8000/api"; 
+
+        let currentActiveOrderId = null;
+
+        // 1. Query Backend Database for Order State
+        async function fetchOrderDetails() {
+            const orderId = document.getElementById("scan-input").value;
+            if (!orderId) return alert("Please enter or scan a valid Order ID.");
+
+            const display = document.getElementById("order-display");
+            display.classList.add("hidden");
+
+            try {
+                // We reuse our POST/verification architecture logic but catch details gracefully
+                // First let's hit our verification server route
+                currentActiveOrderId = parseInt(orderId);
+                
+                // To keep this pure and allow previewing before finalizing, we simulate checking by loading
+                // For this dashboard, we will execute the verification directly to complete it instantly!
+                verifyAndComplete(currentActiveOrderId);
+
+            } catch (err) {
+                alert("Communication breakdown with backend server.");
+            }
+        }
+
+        // 2. Transmit Final State Settlement to PostgreSQL
+        async function verifyAndComplete(orderId) {
+            const display = document.getElementById("order-display");
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/verify`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ order_id: orderId })
+                });
+
+                const data = await response.json();
+
+                display.classList.remove("hidden");
+
+                if (!response.ok) {
+                    // This handles cases where order is already claimed or expired
+                    display.innerHTML = `
+                        <div class="bg-red-950/40 border border-red-500/30 rounded-2xl p-6 text-center space-y-2">
+                            <div class="text-3xl">⚠️</div>
+                            <h3 class="text-lg font-bold text-red-400">Verification Rejected</h3>
+                            <p class="text-sm text-slate-300 font-medium px-2">${data.detail || "Error process execution"}</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Success validation payload layout generation
+                let itemsHtml = data.order_details.items.map(item => `
+                    <div class="flex justify-between items-center border-b border-slate-800/60 pb-2 text-sm">
+                        <span class="text-slate-200 font-medium">${item.name}</span>
+                        <span class="bg-slate-800 text-amber-400 px-3 py-0.5 rounded font-mono font-bold">x${item.quantity}</span>
+                    </div>
+                `).join('');
+
+                display.innerHTML = `
+                    <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-5 space-y-4 shadow-xl">
+                        <div class="flex justify-between items-start border-b border-slate-800 pb-3">
+                            <div>
+                                <span class="bg-emerald-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">VERIFIED & PAID</span>
+                                <h3 class="text-xl font-bold mt-1">Order #${data.order_details.order_id}</h3>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-xs text-slate-400">Total Collected</p>
+                                <p class="text-lg font-mono font-bold text-emerald-400">₹${data.order_details.total_amount.toFixed(2)}</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Dispense Payload:</p>
+                            <div class="space-y-2.5 pt-1">
+                                ${itemsHtml}
+                            </div>
+                        </div>
+
+                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center text-xs font-medium text-emerald-400">
+                            ✓ Database state marked COMPLETED. Hand over food items now.
+                        </div>
+                    </div>
+                `;
+
+                // Clear input line for next fast-paced scan entry cycle
+                document.getElementById("scan-input").value = "";
+
+            } catch (err) {
+                console.error(err);
+                alert("Failed to clear authorization layer.");
+            }
+        }
+    </script>
+</body>
+</html>
