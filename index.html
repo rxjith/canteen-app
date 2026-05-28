@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Canteen | Order Pipeline</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-24">
+
+    <nav class="sticky top-0 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 z-50 px-4 py-3">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold tracking-tight text-emerald-400">CAMPUS<span class="text-slate-100">CRUNCH</span></h1>
+            <div class="bg-slate-800 px-3 py-1 rounded-full text-xs font-semibold text-amber-400 border border-amber-500/20">
+                ⚡ LIVE CONCURRENCY ENGINE
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-md mx-auto px-4 mt-6 space-y-6">
+        
+        <section>
+            <h2 class="text-sm font-semibold tracking-wider text-slate-400 uppercase mb-3">Today's Menu Pipeline</h2>
+            <div id="menu-container" class="space-y-3">
+                <div class="animate-pulse bg-slate-800 h-24 rounded-2xl"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="cart-sheet" class="fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 px-4 py-4 z-40 transform translate-y-full transition-transform duration-300 ease-in-out">
+        <div class="max-w-md mx-auto">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h3 class="text-lg font-bold">Your Locked Payload</h3>
+                    <p class="text-xs text-slate-400">Deducts stock atomically upon execution</p>
+                </div>
+                <button onclick="toggleCartSheet()" class="text-slate-400 hover:text-slate-200 text-sm">Close</button>
+            </div>
+            
+            <div id="cart-items-list" class="space-y-2 max-h-36 overflow-y-auto mb-4 pr-1">
+                </div>
+
+            <button onclick="triggerCheckout()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] transition-transform text-slate-950 font-bold py-3.5 rounded-xl flex justify-between items-center px-4 shadow-lg shadow-emerald-500/10">
+                <span>Lock Stock & Request UPI Link</span>
+                <span id="cart-total" class="bg-slate-950 text-emerald-400 px-2.5 py-0.5 rounded-md font-mono text-sm">₹0.00</span>
+            </button>
+        </div>
+    </div>
+
+    <button id="floating-cart-btn" onclick="toggleCartSheet()" class="hidden fixed bottom-6 right-6 bg-emerald-500 text-slate-950 font-bold px-4 py-3.5 rounded-full shadow-2xl flex items-center gap-2 z-30 hover:bg-emerald-600 transition-all scale-100 active:scale-95">
+        <span>🛒 View Cart</span>
+        <span id="floating-cart-count" class="bg-slate-950 text-emerald-400 text-xs px-2 py-0.5 rounded-full">0</span>
+    </button>
+
+    <div id="payment-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 text-center space-y-4">
+            <div class="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto text-emerald-400 text-xl font-bold">✓</div>
+            <div>
+                <h3 class="text-xl font-bold text-slate-100">Stock Successfully Reserved!</h3>
+                <p class="text-xs text-slate-400 mt-1">Your items are secured for exactly 5 minutes.</p>
+            </div>
+            
+            <a id="payment-upi-link" href="#" class="block w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-lg shadow-amber-400/10">
+                💸 Launch UPI App (GPay/PhonePe)
+            </a>
+            
+            <div class="text-xs text-slate-500 border-t border-slate-800/60 pt-4">
+                Order ID: <span id="modal-order-id" class="font-mono text-slate-300 font-semibold">#--</span> | 
+                Amount: <span id="modal-total" class="font-mono text-slate-300 font-semibold">₹--</span>
+            </div>
+            <button onclick="closeModal()" class="text-sm text-slate-400 hover:text-slate-200 underline pt-2 block mx-auto">Back to Menu</button>
+        </div>
+    </div>
+
+    <script>
+        // 1. Core State Engine
+        const API_BASE = "http://127.0.0.1:8000/api";
+        const USER_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"; // Mock authenticated student
+        
+        // Static local cache matching database seed structure for immediate rendering
+        const menuData = {
+            1: { name: "Chicken Biriyani", price: 120.00, desc: "Premium Basmati Rice with aromatic spices" },
+            2: { name: "Veg Fried Rice", price: 80.00, desc: "Wok-tossed fresh seasonal vegetables" },
+            3: { name: "Samosa", price: 15.00, desc: "Crispy outer pastry with seasoned potato" },
+            4: { name: "Masala Chai", price: 12.00, desc: "Brewed with fresh ginger and cardamom" },
+            5: { name: "Cold Coffee", price: 40.00, desc: "Blended espresso with chilled creamy milk" }
+        };
+
+        let cart = {}; // Tracks item_id -> quantity mappings
+
+        // 2. Initialize UI components on load
+        document.addEventListener("DOMContentLoaded", () => {
+            renderMenu();
+        });
+
+        function renderMenu() {
+            const container = document.getElementById("menu-container");
+            container.innerHTML = ""; // Clear loader animation
+            
+            Object.keys(menuData).forEach(id => {
+                const item = menuData[id];
+                const card = document.createElement("div");
+                card.className = "bg-slate-800/60 border border-slate-800 rounded-2xl p-4 flex justify-between items-center gap-4 hover:border-slate-700/80 transition-colors";
+                card.innerHTML = `
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-slate-100">${item.name}</h3>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed">${item.desc}</p>
+                        <p class="text-emerald-400 font-mono font-semibold text-sm">₹${item.price.toFixed(2)}</p>
+                    </div>
+                    <div id="btn-target-${id}">
+                        <button onclick="addToCart(${id})" class="bg-slate-900 hover:bg-slate-950 border border-slate-700 hover:border-slate-600 px-4 py-2 rounded-xl text-xs font-bold text-emerald-400 tracking-wide transition-all active:scale-95">
+                            ADD TO CART
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // 3. Cart State Modifications
+        function addToCart(id) {
+            cart[id] = 1;
+            updateCartUI();
+        }
+
+        function changeQty(id, delta) {
+            cart[id] += delta;
+            if (cart[id] <= 0) delete cart[id];
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            let totalCount = 0;
+            let totalPrice = 0;
+            const itemsList = document.getElementById("cart-items-list");
+            itemsList.innerHTML = "";
+
+            Object.keys(cart).forEach(id => {
+                const qty = cart[id];
+                const item = menuData[id];
+                totalCount += qty;
+                totalPrice += item.price * qty;
+
+                // Update row counters inside the main list view instantly
+                const target = document.getElementById(`btn-target-${id}`);
+                if (target) {
+                    target.innerHTML = `
+                        <div class="flex items-center bg-slate-900 border border-slate-700 rounded-xl overflow-hidden font-mono font-bold text-sm">
+                            <button onclick="changeQty(${id}, -1)" class="px-3 py-1.5 text-slate-400 hover:bg-slate-800 transition-colors">-</button>
+                            <span class="px-2 text-slate-100">${qty}</span>
+                            <button onclick="changeQty(${id}, 1)" class="px-3 py-1.5 text-slate-400 hover:bg-slate-800 transition-colors">+</button>
+                        </div>
+                    `;
+                }
+
+                // Append item row into bottom slide sheet layout
+                const row = document.createElement("div");
+                row.className = "flex justify-between items-center bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-sm";
+                row.innerHTML = `
+                    <span class="font-medium">${item.name} <span class="text-xs text-slate-500 font-mono">x${qty}</span></span>
+                    <span class="font-mono text-emerald-400 font-semibold">₹${(item.price * qty).toFixed(2)}</span>
+                `;
+                itemsList.appendChild(row);
+            });
+
+            // Handle UI elements transitions depending on data bounds
+            const floatingBtn = document.getElementById("floating-cart-btn");
+            const cartSheet = document.getElementById("cart-sheet");
+            
+            if (totalCount > 0) {
+                floatingBtn.classList.remove("hidden");
+                document.getElementById("floating-cart-count").innerText = totalCount;
+                document.getElementById("cart-total").innerText = `₹${totalPrice.toFixed(2)}`;
+            } else {
+                floatingBtn.classList.add("hidden");
+                cartSheet.classList.add("translate-y-full");
+                // Reset standard add button layouts
+                Object.keys(menuData).forEach(id => {
+                    const target = document.getElementById(`btn-target-${id}`);
+                    if (target) {
+                        target.innerHTML = `<button onclick="addToCart(${id})" class="bg-slate-900 hover:bg-slate-950 border border-slate-700 hover:border-slate-600 px-4 py-2 rounded-xl text-xs font-bold text-emerald-400 tracking-wide transition-all">ADD TO CART</button>`;
+                    }
+                });
+            }
+        }
+
+        function toggleCartSheet() {
+            const sheet = document.getElementById("cart-sheet");
+            sheet.classList.toggle("translate-y-full");
+        }
+
+        // 4. Connects Client Side Event To FastAPI Server Thread via Fetch API
+        async function triggerCheckout() {
+            // Build formal database-ready JSON body array structure mapping to Pydantic expectations
+            const cartPayload = Object.keys(cart).map(id => ({
+                item_id: parseInt(id),
+                quantity: cart[id]
+            }));
+
+            try {
+                const response = await fetch(`${API_BASE}/checkout`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        user_id: USER_UUID,
+                        cart: cartPayload
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    // Extract custom validation message thrown out of transaction lock statements
+                    alert(data.detail || "Transaction pipeline error encountered.");
+                    return;
+                }
+
+                // Success pipeline execution: trigger confirmation sheet components
+                document.getElementById("modal-order-id").innerText = `#${data.order_id}`;
+                document.getElementById("modal-total").innerText = `₹${data.total_amount.toFixed(2)}`;
+                document.getElementById("payment-upi-link").href = data.upi_url;
+                
+                // Open payment presentation layout
+                document.getElementById("payment-modal").classList.remove("hidden");
+                toggleCartSheet();
+                
+            } catch (err) {
+                console.error("Network communication failed:", err);
+                alert("Could not connect to FastAPI server backend engine.");
+            }
+        }
+
+        function closeModal() {
+            document.getElementById("payment-modal").classList.add("hidden");
+            cart = {}; // Empty local application state memory bounds
+            updateCartUI();
+        }
+    </script>
+</body>
+</html>
