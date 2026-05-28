@@ -129,7 +129,7 @@
             }
         }
 
-        // 3. Render Menu pipeline matching visibility states
+        // 3. Render Menu pipeline matching visibility states (Descriptions Removed)
         function renderMenu() {
             const container = document.getElementById("menu-container");
             container.innerHTML = ""; 
@@ -143,12 +143,11 @@
                 const card = document.createElement("div");
                 card.className = "bg-slate-800/60 border border-slate-800 rounded-2xl p-4 flex justify-between items-center gap-4 hover:border-slate-700/80 transition-colors";
                 card.innerHTML = `
-                    <div class="space-y-1">
+                    <div class="space-y-1.5">
                         <div class="flex items-center gap-2">
                             <h3 class="font-bold text-slate-100">${item.name}</h3>
                             <span class="text-[9px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded font-mono border border-slate-800">${item.category}</span>
                         </div>
-                        <p class="text-xs text-slate-400 leading-relaxed">${item.desc || 'Fresh menu addition'}</p>
                         <p class="text-emerald-400 font-mono font-semibold text-sm">₹${item.price.toFixed(2)}</p>
                     </div>
                     <div id="btn-target-${id}">
