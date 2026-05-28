@@ -104,20 +104,23 @@
             renderMenu();
         });
 
+        // Replace the renderMenu function inside index.html to read structural updates
         function renderMenu() {
             const container = document.getElementById("menu-container");
-            container.innerHTML = ""; // Clear loader animation
+            container.innerHTML = ""; 
             
             Object.keys(menuData).forEach(id => {
                 const item = menuData[id];
+                
+                // CRITICAL UPDATE: Skip generating the element if the item is hidden
+                if (item.is_visible === false) return; 
+
                 const card = document.createElement("div");
                 card.className = "bg-slate-800/60 border border-slate-800 rounded-2xl p-4 flex justify-between items-center gap-4 hover:border-slate-700/80 transition-colors";
                 card.innerHTML = `
                     <div class="space-y-1">
-                        <div class="flex items-center gap-2">
-                            <h3 class="font-bold text-slate-100">${item.name}</h3>
-                        </div>
-                        <p class="text-xs text-slate-400 leading-relaxed">${item.desc}</p>
+                        <h3 class="font-bold text-slate-100">${item.name}</h3>
+                        <p class="text-xs text-slate-400 leading-relaxed">${item.desc || 'Fresh menu addition'}</p>
                         <p class="text-emerald-400 font-mono font-semibold text-sm">₹${item.price.toFixed(2)}</p>
                     </div>
                     <div id="btn-target-${id}">
