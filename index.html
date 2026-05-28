@@ -23,28 +23,23 @@
 
     <main class="max-w-md mx-auto px-4 mt-6 space-y-6">
         
-        <!-- Categorized Menu Pipeline Blocks -->
         <div id="menu-sections" class="space-y-8">
             
-            <!-- Loading Skeleton State Indicator -->
             <div id="menu-loading-skeleton" class="space-y-3">
                 <h2 class="text-sm font-semibold tracking-wider text-slate-400 uppercase">Today's Menu Pipeline</h2>
                 <div class="animate-pulse bg-slate-800 h-24 rounded-2xl"></div>
             </div>
 
-            <!-- Lunch Section -->
             <div id="section-Lunch" class="hidden space-y-4">
                 <h2 class="text-sm font-bold text-amber-500/90 tracking-widest uppercase border-b border-slate-800/80 pb-2">🍱 Lunch Pipeline</h2>
                 <div id="grid-Lunch" class="space-y-3"></div>
             </div>
 
-            <!-- Snacks Section -->
             <div id="section-Snacks" class="hidden space-y-4">
                 <h2 class="text-sm font-bold text-amber-500/90 tracking-widest uppercase border-b border-slate-800/80 pb-2">🍿 Snacks Pipeline</h2>
                 <div id="grid-Snacks" class="space-y-3"></div>
             </div>
 
-            <!-- Drinks Section -->
             <div id="section-Drinks" class="hidden space-y-4">
                 <h2 class="text-sm font-bold text-amber-500/90 tracking-widest uppercase border-b border-slate-800/80 pb-2">🥤 Drinks Pipeline</h2>
                 <div id="grid-Drinks" class="space-y-3"></div>
@@ -53,7 +48,6 @@
 
     </main>
 
-    <!-- Bottom Cart Slide Sheet -->
     <div id="cart-sheet" class="fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 px-4 py-4 z-40 transform translate-y-full transition-transform duration-300 ease-in-out">
         <div class="max-w-md mx-auto">
             <div class="flex justify-between items-center mb-4">
@@ -73,13 +67,11 @@
         </div>
     </div>
 
-    <!-- Floating Action Button Entry Point -->
     <button id="floating-cart-btn" onclick="toggleCartSheet()" class="hidden fixed bottom-6 right-6 bg-emerald-500 text-slate-950 font-bold px-4 py-3.5 rounded-full shadow-2xl flex items-center gap-2 z-30 hover:bg-emerald-600 transition-all scale-100 active:scale-95">
         <span>🛒 View Cart</span>
         <span id="floating-cart-count" class="bg-slate-950 text-emerald-400 text-xs px-2 py-0.5 rounded-full">0</span>
     </button>
 
-    <!-- Stock Holding Modal -->
     <div id="payment-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 text-center space-y-4">
             <div class="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto text-emerald-400 text-xl font-bold">✓</div>
@@ -106,15 +98,14 @@
     </div>
 
     <script>
-        // 1. Core State Engine Configuration
         const API_BASE = "http://192.168.1.36:8000/api"; 
-        const USER_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"; // Mock authenticated student
+        const USER_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"; 
         
         let menuData = {}; 
         let cart = {}; 
         let countdownInterval = null; 
+        let pollingInterval = null;
 
-        // 2. Fetch Live Database Matrix State on Page Load
         document.addEventListener("DOMContentLoaded", async () => {
             await fetchLiveMenu();
         });
@@ -138,7 +129,7 @@
                     };
                 });
 
-                if (skeleton) skeleton.remove(); // Drop the skeleton component cleanly
+                if (skeleton) skeleton.remove(); 
                 renderMenu();
             } catch (err) {
                 console.error(err);
@@ -152,11 +143,9 @@
             }
         }
 
-        // 3. Render Categorized Menu Pipeline (No Descriptions)
         function renderMenu() {
             const categories = ["Lunch", "Snacks", "Drinks"];
             
-            // Clear existing elements in all category grid frameworks out of view bounds
             categories.forEach(cat => {
                 document.getElementById(`grid-${cat}`).innerHTML = "";
                 document.getElementById(`section-${cat}`).classList.add("hidden");
@@ -167,7 +156,6 @@
             Object.keys(menuData).forEach(id => {
                 const item = menuData[id];
                 
-                // CRITICAL RULE ENFORCEMENT: Skip generating hidden menu items entirely
                 if (item.is_visible === false) return; 
 
                 const targetGrid = document.getElementById(`grid-${item.category}`);
@@ -191,7 +179,6 @@
                 activeCounts[item.category]++;
             });
 
-            // Make a section block visible only if it contains active items
             categories.forEach(cat => {
                 if (activeCounts[cat] > 0) {
                     document.getElementById(`section-${cat}`).classList.remove("hidden");
@@ -199,7 +186,6 @@
             });
         }
 
-        // 4. Cart Modifications
         function addToCart(id) {
             cart[id] = 1;
             updateCartUI();
@@ -263,13 +249,11 @@
             }
         }
 
-        // Toggle layout classes
         function toggleCartSheet() {
             const sheet = document.getElementById("cart-sheet");
             sheet.classList.toggle("translate-y-full");
         }
 
-        // 5. Connects Client Side Event To FastAPI Server Thread via Fetch API
         async function triggerCheckout() {
             const cartPayload = Object.keys(cart).map(id => ({
                 item_id: parseInt(id),
@@ -301,10 +285,60 @@
                 document.getElementById("payment-modal").classList.remove("hidden");
                 toggleCartSheet();
                 
+                startPaymentStatusPolling(data.order_id);
+                
             } catch (err) {
                 console.error("Network communication failed:", err);
                 alert("Could not connect to FastAPI server backend engine.");
             }
+        }
+
+        function startPaymentStatusPolling(orderId) {
+            if (pollingInterval) clearInterval(pollingInterval);
+
+            pollingInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/orders/${orderId}/status`);
+                    if (!response.ok) return;
+
+                    const data = await response.json();
+
+                    if (data.status === "completed") {
+                        clearInterval(pollingInterval);
+                        clearInterval(countdownInterval);
+                        showPaymentSuccessScreen();
+                    } 
+                    else if (data.status === "expired") {
+                        clearInterval(pollingInterval);
+                        clearInterval(countdownInterval);
+                        showPaymentFailureScreen();
+                    }
+                } catch (err) {
+                    console.error("Polling system error:", err);
+                }
+            }, 2500);
+        }
+
+        function showPaymentSuccessScreen() {
+            const clockDisplay = document.getElementById("countdown-clock");
+            const upiButton = document.getElementById("payment-upi-link");
+            
+            clockDisplay.innerText = "🎉 VERIFIED & COMPLETED";
+            clockDisplay.className = "text-xl font-bold text-emerald-400 mt-0.5 animate-bounce";
+            
+            upiButton.innerText = "✅ Take Your Food Token";
+            upiButton.className = "block w-full bg-emerald-500 text-slate-950 font-bold py-3 rounded-xl text-center pointer-events-none transition-all shadow-lg shadow-emerald-500/20";
+        }
+
+        function showPaymentFailureScreen() {
+            const clockDisplay = document.getElementById("countdown-clock");
+            const upiButton = document.getElementById("payment-upi-link");
+            
+            clockDisplay.innerText = "00:00";
+            clockDisplay.className = "text-2xl font-mono font-bold text-red-500 mt-0.5 animate-pulse";
+            
+            upiButton.innerText = "🚨 Reservation Cancelled";
+            upiButton.className = "block w-full bg-slate-800 text-slate-500 font-bold py-3 rounded-xl cursor-not-allowed pointer-events-none";
         }
 
         function startModalTimer(expiryIsoString) {
@@ -343,11 +377,11 @@
 
         function closeModal() {
             if (countdownInterval) clearInterval(countdownInterval);
+            if (pollingInterval) clearInterval(pollingInterval); 
             document.getElementById("countdown-clock").className = "text-2xl font-mono font-bold text-amber-400 mt-0.5";
             document.getElementById("payment-modal").classList.add("hidden");
             cart = {}; 
             
-            // Re-fetch the layout to balance any items hidden during the payment window
             fetchLiveMenu(); 
         }
     </script>

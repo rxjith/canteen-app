@@ -93,9 +93,8 @@
     <script>
         const API_BASE = "http://192.168.1.36:8000/api";
         let currentActiveOrderId = null;
-        let menuData = {}; // Managed completely dynamically by backend pulls
+        let menuData = {}; 
 
-        // 1. Initialize and Sync Database Layouts
         document.addEventListener("DOMContentLoaded", async () => {
             await fetchLiveAdminMenu();
         });
@@ -111,7 +110,7 @@
                     menuData[item.item_id] = {
                         name: item.name,
                         price: item.price,
-                        stock: item.stock || 50, // Fallback if backend key varies
+                        stock: item.stock || 50, 
                         category: item.category,
                         is_visible: item.is_visible
                     };
@@ -169,7 +168,6 @@
             });
         }
 
-        // 2. Commit Live Price Updates
         async function commitPriceUpdate(itemId) {
             const priceField = document.getElementById(`price-input-${itemId}`);
             const updatedPrice = parseFloat(priceField.value);
@@ -192,7 +190,6 @@
             }
         }
 
-        // 3. Toggle Visibility Flag
         async function toggleVisibilityState(itemId) {
             const currentVisibilityState = menuData[itemId].is_visible;
             const targetState = !currentVisibilityState;
@@ -213,7 +210,6 @@
             }
         }
 
-        // 4. Create and Deploy Brand New Menu Entity
         async function commitNewItemToServer() {
             const name = document.getElementById("new-item-name").value;
             const price = parseFloat(document.getElementById("new-item-price").value);
@@ -233,7 +229,6 @@
                 if (!response.ok) throw new Error();
                 const data = await response.json();
                 
-                // CRITICAL FIX: Match key structure returned from main.py model tracking schema
                 const newId = data.item.item_id || data.item.id;
                 menuData[newId] = { name: data.item.name, price: data.item.price, stock: stock, category: category, is_visible: true };
                 
@@ -249,7 +244,6 @@
             }
         }
 
-        // 5. Query Backend Database for Order State
         async function fetchOrderDetails() {
             const orderId = document.getElementById("scan-input").value;
             if (!orderId) return alert("Please enter or scan a valid Order ID.");
@@ -265,7 +259,6 @@
             }
         }
 
-        // 6. Transmit Final State Settlement to PostgreSQL
         async function verifyAndComplete(orderId) {
             const display = document.getElementById("order-display");
             
@@ -310,11 +303,11 @@
                     <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-5 space-y-4 shadow-xl">
                         <div class="flex justify-between items-start border-b border-slate-800 pb-3">
                             <div>
-                                <span class="bg-emerald-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">VERIFIED & PAID</span>
+                                <span class="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">PENDING VISUAL CHECK</span>
                                 <h3 class="text-xl font-bold mt-1">Order #${data.order_details.order_id}</h3>
                             </div>
                             <div class="text-right">
-                                <p class="text-xs text-slate-400">Total Collected</p>
+                                <p class="text-xs text-slate-400">Collect/Verify</p>
                                 <p class="text-lg font-mono font-bold text-emerald-400">₹${data.order_details.total_amount.toFixed(2)}</p>
                             </div>
                         </div>
@@ -322,8 +315,8 @@
                             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Dispense Payload:</p>
                             <div class="space-y-2.5 pt-1">${itemsHtml}</div>
                         </div>
-                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center text-xs font-medium text-emerald-400">
-                            ✓ Database state marked COMPLETED. Hand over food items now.
+                        <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center text-xs font-medium text-amber-400 animate-pulse">
+                            ⚠️ ${data.message}
                         </div>
                     </div>
                 `;
@@ -336,7 +329,6 @@
             }
         }
 
-        // 7. Fire Stock Transmissions into Database Pipeline
         async function commitStockUpdate(itemId) {
             const stockInput = document.getElementById(`stock-input-${itemId}`);
             const newStockValue = parseInt(stockInput.value);

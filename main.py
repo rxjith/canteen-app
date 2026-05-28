@@ -204,32 +204,35 @@ async def verify_and_complete_order(request: VerifyOrderRequest, conn=Depends(ge
         if order['status'] == 'expired':
             raise HTTPException(status_code=400, detail="Order Expired! Stock was already released back to inventory.")
 
-        items = await conn.fetch(
-            """
-            SELECT m.name, oi.quantity 
-            FROM order_items oi
-            JOIN menu_items m ON oi.item_id = m.item_id
-            WHERE oi.order_id = $1
-            """,
-            request.order_id
-        )
+        # --- CRITICAL RE-ENGINEERED UNPAID BLOCK ---
+        # If the order is still pending, force the staff to verify payment manually first
+        if order['status'] == 'pending_payment':
+            items = await conn.fetch(
+                """
+                SELECT m.name, oi.quantity 
+                FROM order_items oi
+                JOIN menu_items m ON oi.item_id = m.item_id
+                WHERE oi.order_id = $1
+                """,
+                request.order_id
+            )
+            item_list = [{"name": item['name'], "quantity": item['quantity']} for item in items]
 
-        item_list = [{"name": item['name'], "quantity": item['quantity']} for item in items]
+            # Mark it completed because the admin has visually verified it right now
+            await conn.execute(
+                "UPDATE orders SET status = 'completed' WHERE order_id = $1",
+                request.order_id
+            )
 
-        await conn.execute(
-            "UPDATE orders SET status = 'completed' WHERE order_id = $1",
-            request.order_id
-        )
-
-        return {
-            "status": "verified",
-            "message": "Payment verified. Hand over food!",
-            "order_details": {
-                "order_id": request.order_id,
-                "total_amount": float(order['total_amount']),
-                "items": item_list
+            return {
+                "status": "verified",
+                "message": f"Please verify manual UPI credit of ₹{float(order['total_amount'])} before dispensing food!",
+                "order_details": {
+                    "order_id": request.order_id,
+                    "total_amount": float(order['total_amount']),
+                    "items": item_list
+                }
             }
-        }
 
 
 # --- ADMINISTRATIVE CONTENT CONTROL ENDPOINTS ---
