@@ -328,3 +328,23 @@ async def create_menu_item(payload: NewItemRequest, conn=Depends(get_db)):
                 "current_stock": result['current_stock']
             }
         }
+        
+@app.get("/api/menu")
+async def get_live_menu(conn=Depends(get_db)):
+    # Pull items sorted by ID so the student categories don't shuffle around randomly
+    rows = await conn.fetch(
+        "SELECT item_id, name, price, description, category, is_visible FROM menu_items ORDER BY item_id;"
+    )
+    
+    # Format into an array of dictionaries for the client side
+    return [
+        {
+            "item_id": row["item_id"],
+            "name": row["name"],
+            "price": float(row["price"]),
+            "desc": row["description"],
+            "category": row["category"],
+            "is_visible": row["is_visible"]
+        }
+        for row in rows
+    ]

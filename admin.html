@@ -91,40 +91,40 @@
     </main>
 
     <script>
-        // Use the EXACT same Wi-Fi IP address you looked up earlier for your ThinkPad!
         const API_BASE = "http://192.168.1.36:8000/api";
         let currentActiveOrderId = null;
+        let menuData = {}; // Managed completely dynamically by backend pulls
 
-        // Master local cache updated with your actual canteen prices and items
-        const menuData = {
-            1: { name: "Fried Rice with Chicken Curry", price: 150.00, category: "Lunch", is_visible: true },
-            2: { name: "Fried Rice with Chilli Chicken", price: 150.00, category: "Lunch", is_visible: true },
-            3: { name: "Meals", price: 60.00, category: "Lunch", is_visible: true },
-            4: { name: "Omelette", price: 15.00, category: "Lunch", is_visible: true },
-            5: { name: "Chapati", price: 12.00, category: "Lunch", is_visible: true },
-            6: { name: "Porotta", price: 15.00, category: "Lunch", is_visible: true },
-            7: { name: "Egg Curry", price: 35.00, category: "Lunch", is_visible: true },
-            8: { name: "Chicken Curry", price: 75.00, category: "Lunch", is_visible: true },
-            9: { name: "Fish Curry", price: 65.00, category: "Lunch", is_visible: true },
-            
-            10: { name: "Meat Roll", price: 30.00, category: "Snacks", is_visible: true },
-            11: { name: "Egg Puffs", price: 15.00, category: "Snacks", is_visible: true },
-            12: { name: "Chicken Puffs", price: 20.00, category: "Snacks", is_visible: true },
-            13: { name: "Chicken Cutlet", price: 20.00, category: "Snacks", is_visible: true },
-            14: { name: "Chicken Sandwich", price: 35.00, category: "Snacks", is_visible: true },
-            15: { name: "Veg. Sandwich", price: 30.00, category: "Snacks", is_visible: true },
-            16: { name: "Burger", price: 50.00, category: "Snacks", is_visible: true },
-            
-            17: { name: "Watermelon/Mint Juice", price: 40.00, category: "Drinks", is_visible: true }
-        };
-
-        // 1. Initialize UI Elements On Startup
-        document.addEventListener("DOMContentLoaded", () => {
-            renderMasterInventoryPanel();
+        // 1. Initialize and Sync Database Layouts
+        document.addEventListener("DOMContentLoaded", async () => {
+            await fetchLiveAdminMenu();
         });
 
+        async function fetchLiveAdminMenu() {
+            try {
+                const response = await fetch(`${API_BASE}/menu`);
+                if (!response.ok) throw new Error();
+                const liveItems = await response.json();
+                
+                menuData = {};
+                liveItems.forEach(item => {
+                    menuData[item.item_id] = {
+                        name: item.name,
+                        price: item.price,
+                        stock: item.stock || 50, // Fallback if backend key varies
+                        category: item.category,
+                        is_visible: item.is_visible
+                    };
+                });
+                
+                renderMasterInventoryPanel();
+            } catch (err) {
+                console.error(err);
+                alert("Failed to synchronize tracking system with PostgreSQL server state.");
+            }
+        }
+
         function renderMasterInventoryPanel() {
-            // Flush elements
             document.getElementById("grid-Lunch").innerHTML = "";
             document.getElementById("grid-Snacks").innerHTML = "";
             document.getElementById("grid-Drinks").innerHTML = "";
@@ -153,7 +153,7 @@
                         
                         <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/40">
                             <div class="flex gap-1.5 items-center">
-                                <input type="number" id="stock-input-${id}" placeholder="Stock" value="50"
+                                <input type="number" id="stock-input-${id}" placeholder="Stock" value="${item.stock || 50}"
                                     class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono text-xs font-bold w-14 text-slate-100 focus:outline-none focus:border-amber-500">
                                 <button onclick="commitStockUpdate(${id})" class="bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-bold px-2 py-1 rounded-md border border-slate-700 flex-1">Stock</button>
                             </div>
@@ -233,10 +233,10 @@
                 if (!response.ok) throw new Error();
                 const data = await response.json();
                 
-                // Track item internally in memory state dynamically
-                menuData[data.item.id] = { name: data.item.name, price: data.item.price, category: category, is_visible: true };
+                // CRITICAL FIX: Match key structure returned from main.py model tracking schema
+                const newId = data.item.item_id || data.item.id;
+                menuData[newId] = { name: data.item.name, price: data.item.price, stock: stock, category: category, is_visible: true };
                 
-                // Reset inputs and redraw grids
                 document.getElementById("new-item-name").value = "";
                 document.getElementById("new-item-price").value = "";
                 document.getElementById("new-item-stock").value = "";
@@ -356,6 +356,7 @@
                 });
 
                 if (!response.ok) throw new Error();
+                menuData[itemId].stock = newStockValue;
                 triggerControlSuccessFeedback(stockInput);
 
             } catch (err) {

@@ -83,28 +83,53 @@
     </div>
 
     <script>
-        // 1. Core State Engine
+        // 1. Core State Engine Configuration
         const API_BASE = "http://192.168.1.36:8000/api"; 
         const USER_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"; // Mock authenticated student
         
-        // Static local cache matching database seed structure for immediate rendering
-        const menuData = {
-            1: { name: "Chicken Biriyani", price: 120.00, desc: "Premium Basmati Rice with aromatic spices" },
-            2: { name: "Veg Fried Rice", price: 80.00, desc: "Wok-tossed fresh seasonal vegetables" },
-            3: { name: "Samosa", price: 15.00, desc: "Crispy outer pastry with seasoned potato" },
-            4: { name: "Masala Chai", price: 12.00, desc: "Brewed with fresh ginger and cardamom" },
-            5: { name: "Cold Coffee", price: 40.00, desc: "Blended espresso with chilled creamy milk" }
-        };
+        // This will now act as a live data cache populated by PostgreSQL
+        let menuData = {}; 
+        let cart = {}; 
+        let countdownInterval = null; 
 
-        let cart = {}; // Tracks item_id -> quantity mappings
-        let countdownInterval = null; // Holds the live UI runtime interval thread
-
-        // 2. Initialize UI components on load
-        document.addEventListener("DOMContentLoaded", () => {
-            renderMenu();
+        // 2. Fetch Live Database Matrix State on Page Load
+        document.addEventListener("DOMContentLoaded", async () => {
+            await fetchLiveMenu();
         });
 
-        // Replace the renderMenu function inside index.html to read structural updates
+        async function fetchLiveMenu() {
+            const container = document.getElementById("menu-container");
+            
+            try {
+                const response = await fetch(`${API_BASE}/menu`);
+                if (!response.ok) throw new Error("Database query rejected.");
+                
+                const liveItemsArray = await response.json();
+                
+                // Convert incoming row array back into object lookups for instantaneous button renders
+                menuData = {};
+                liveItemsArray.forEach(item => {
+                    menuData[item.item_id] = {
+                        name: item.name,
+                        price: item.price,
+                        desc: item.desc,
+                        category: item.category,
+                        is_visible: item.is_visible
+                    };
+                });
+
+                renderMenu();
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = `
+                    <div class="bg-red-950/30 border border-red-500/20 text-red-400 p-4 rounded-xl text-center text-xs font-medium">
+                        ⚠️ Network connection failed. Could not sync with local ThinkPad backend matrix.
+                    </div>
+                `;
+            }
+        }
+
+        // 3. Render Menu pipeline matching visibility states
         function renderMenu() {
             const container = document.getElementById("menu-container");
             container.innerHTML = ""; 
@@ -112,14 +137,17 @@
             Object.keys(menuData).forEach(id => {
                 const item = menuData[id];
                 
-                // CRITICAL UPDATE: Skip generating the element if the item is hidden
+                // CRITICAL RULE ENFORCEMENT: Skip generating hidden menu items entirely
                 if (item.is_visible === false) return; 
 
                 const card = document.createElement("div");
                 card.className = "bg-slate-800/60 border border-slate-800 rounded-2xl p-4 flex justify-between items-center gap-4 hover:border-slate-700/80 transition-colors";
                 card.innerHTML = `
                     <div class="space-y-1">
-                        <h3 class="font-bold text-slate-100">${item.name}</h3>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-slate-100">${item.name}</h3>
+                            <span class="text-[9px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded font-mono border border-slate-800">${item.category}</span>
+                        </div>
                         <p class="text-xs text-slate-400 leading-relaxed">${item.desc || 'Fresh menu addition'}</p>
                         <p class="text-emerald-400 font-mono font-semibold text-sm">₹${item.price.toFixed(2)}</p>
                     </div>
@@ -133,7 +161,7 @@
             });
         }
 
-        // 3. Cart State Modifications
+        // 4. Cart Modifications
         function addToCart(id) {
             cart[id] = 1;
             updateCartUI();
@@ -157,7 +185,6 @@
                 totalCount += qty;
                 totalPrice += item.price * qty;
 
-                // Update row counters inside the main list view instantly
                 const target = document.getElementById(`btn-target-${id}`);
                 if (target) {
                     target.innerHTML = `
@@ -169,7 +196,6 @@
                     `;
                 }
 
-                // Append item row into bottom slide sheet layout
                 const row = document.createElement("div");
                 row.className = "flex justify-between items-center bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-sm";
                 row.innerHTML = `
@@ -179,7 +205,6 @@
                 itemsList.appendChild(row);
             });
 
-            // Handle UI elements transitions depending on data bounds
             const floatingBtn = document.getElementById("floating-cart-btn");
             const cartSheet = document.getElementById("cart-sheet");
             
@@ -190,7 +215,7 @@
             } else {
                 floatingBtn.classList.add("hidden");
                 cartSheet.classList.add("translate-y-full");
-                // Reset standard add button layouts
+                
                 Object.keys(menuData).forEach(id => {
                     const target = document.getElementById(`btn-target-${id}`);
                     if (target) {
@@ -205,7 +230,7 @@
             sheet.classList.toggle("translate-y-full");
         }
 
-        // 4. Connects Client Side Event To FastAPI Server Thread via Fetch API
+        // 5. Connects Client Side Event To FastAPI Server Thread via Fetch API
         async function triggerCheckout() {
             const cartPayload = Object.keys(cart).map(id => ({
                 item_id: parseInt(id),
@@ -229,14 +254,11 @@
                     return;
                 }
 
-                // Success pipeline execution: trigger confirmation sheet components
                 document.getElementById("modal-order-id").innerText = `#${data.order_id}`;
                 document.getElementById("modal-total").innerText = `₹${data.total_amount.toFixed(2)}`;
                 document.getElementById("payment-upi-link").href = data.upi_url;
                 
-                // Fire up the high-resolution countdown timer loop using server timestamp
                 startModalTimer(data.expires_at);
-
                 document.getElementById("payment-modal").classList.remove("hidden");
                 toggleCartSheet();
                 
@@ -246,16 +268,13 @@
             }
         }
 
-        // High-precision clock reconciliation
         function startModalTimer(expiryIsoString) {
-            // Clear any running zombie timers out of background state bounds
             if (countdownInterval) clearInterval(countdownInterval);
 
             const expiryTime = new Date(expiryIsoString).getTime();
             const clockDisplay = document.getElementById("countdown-clock");
             const upiButton = document.getElementById("payment-upi-link");
 
-            // Reset standard button active layout styles
             clockDisplay.className = "text-2xl font-mono font-bold text-amber-400 mt-0.5";
             upiButton.className = "block w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-lg shadow-amber-400/10 pointer-events-auto opacity-100";
             upiButton.innerText = "💸 Launch UPI App (GPay/PhonePe)";
@@ -264,23 +283,19 @@
                 const now = new Date().getTime();
                 const distance = expiryTime - now;
 
-                // Time math calculations for minutes and seconds
                 const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-                // Format leading digits elegantly
                 const strMinutes = minutes < 10 ? "0" + minutes : minutes;
                 const strSeconds = seconds < 10 ? "0" + seconds : seconds;
 
                 clockDisplay.innerText = `${strMinutes}:${strSeconds}`;
 
-                // If reservation window closes, lock out the actions
                 if (distance < 0) {
                     clearInterval(countdownInterval);
                     clockDisplay.innerText = "00:00";
                     clockDisplay.className = "text-2xl font-mono font-bold text-red-500 animate-pulse mt-0.5";
                     
-                    // Freeze action interface pipeline 
                     upiButton.innerText = "🚨 Hold Expired - Re-order Item";
                     upiButton.className = "block w-full bg-slate-800 text-slate-500 font-bold py-3 rounded-xl cursor-not-allowed pointer-events-none";
                 }
@@ -291,8 +306,10 @@
             if (countdownInterval) clearInterval(countdownInterval);
             document.getElementById("countdown-clock").className = "text-2xl font-mono font-bold text-amber-400 mt-0.5";
             document.getElementById("payment-modal").classList.add("hidden");
-            cart = {}; // Empty local application state memory bounds
-            updateCartUI();
+            cart = {}; 
+            
+            // Re-fetch the layout to balance any items hidden during the payment window
+            fetchLiveMenu(); 
         }
     </script>
 </body>
