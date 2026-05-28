@@ -23,15 +23,37 @@
 
     <main class="max-w-md mx-auto px-4 mt-6 space-y-6">
         
-        <section>
-            <h2 class="text-sm font-semibold tracking-wider text-slate-400 uppercase mb-3">Today's Menu Pipeline</h2>
-            <div id="menu-container" class="space-y-3">
+        <!-- Categorized Menu Pipeline Blocks -->
+        <div id="menu-sections" class="space-y-8">
+            
+            <!-- Loading Skeleton State Indicator -->
+            <div id="menu-loading-skeleton" class="space-y-3">
+                <h2 class="text-sm font-semibold tracking-wider text-slate-400 uppercase">Today's Menu Pipeline</h2>
                 <div class="animate-pulse bg-slate-800 h-24 rounded-2xl"></div>
             </div>
-        </section>
+
+            <!-- Lunch Section -->
+            <div id="section-Lunch" class="hidden space-y-4">
+                <h2 class="text-sm font-bold text-amber-500/90 tracking-widest uppercase border-b border-slate-800/80 pb-2">🍱 Lunch Pipeline</h2>
+                <div id="grid-Lunch" class="space-y-3"></div>
+            </div>
+
+            <!-- Snacks Section -->
+            <div id="section-Snacks" class="hidden space-y-4">
+                <h2 class="text-sm font-bold text-amber-500/90 tracking-widest uppercase border-b border-slate-800/80 pb-2">🍿 Snacks Pipeline</h2>
+                <div id="grid-Snacks" class="space-y-3"></div>
+            </div>
+
+            <!-- Drinks Section -->
+            <div id="section-Drinks" class="hidden space-y-4">
+                <h2 class="text-sm font-bold text-amber-500/90 tracking-widest uppercase border-b border-slate-800/80 pb-2">🥤 Drinks Pipeline</h2>
+                <div id="grid-Drinks" class="space-y-3"></div>
+            </div>
+        </div>
 
     </main>
 
+    <!-- Bottom Cart Slide Sheet -->
     <div id="cart-sheet" class="fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 px-4 py-4 z-40 transform translate-y-full transition-transform duration-300 ease-in-out">
         <div class="max-w-md mx-auto">
             <div class="flex justify-between items-center mb-4">
@@ -42,8 +64,7 @@
                 <button onclick="toggleCartSheet()" class="text-slate-400 hover:text-slate-200 text-sm">Close</button>
             </div>
             
-            <div id="cart-items-list" class="space-y-2 max-h-36 overflow-y-auto mb-4 pr-1">
-            </div>
+            <div id="cart-items-list" class="space-y-2 max-h-36 overflow-y-auto mb-4 pr-1"></div>
 
             <button onclick="triggerCheckout()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] transition-transform text-slate-950 font-bold py-3.5 rounded-xl flex justify-between items-center px-4 shadow-lg shadow-emerald-500/10">
                 <span>Lock Stock & Request UPI Link</span>
@@ -52,11 +73,13 @@
         </div>
     </div>
 
+    <!-- Floating Action Button Entry Point -->
     <button id="floating-cart-btn" onclick="toggleCartSheet()" class="hidden fixed bottom-6 right-6 bg-emerald-500 text-slate-950 font-bold px-4 py-3.5 rounded-full shadow-2xl flex items-center gap-2 z-30 hover:bg-emerald-600 transition-all scale-100 active:scale-95">
         <span>🛒 View Cart</span>
         <span id="floating-cart-count" class="bg-slate-950 text-emerald-400 text-xs px-2 py-0.5 rounded-full">0</span>
     </button>
 
+    <!-- Stock Holding Modal -->
     <div id="payment-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 text-center space-y-4">
             <div class="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto text-emerald-400 text-xl font-bold">✓</div>
@@ -87,7 +110,6 @@
         const API_BASE = "http://192.168.1.36:8000/api"; 
         const USER_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"; // Mock authenticated student
         
-        // This will now act as a live data cache populated by PostgreSQL
         let menuData = {}; 
         let cart = {}; 
         let countdownInterval = null; 
@@ -98,7 +120,7 @@
         });
 
         async function fetchLiveMenu() {
-            const container = document.getElementById("menu-container");
+            const skeleton = document.getElementById("menu-loading-skeleton");
             
             try {
                 const response = await fetch(`${API_BASE}/menu`);
@@ -106,48 +128,56 @@
                 
                 const liveItemsArray = await response.json();
                 
-                // Convert incoming row array back into object lookups for instantaneous button renders
                 menuData = {};
                 liveItemsArray.forEach(item => {
                     menuData[item.item_id] = {
                         name: item.name,
                         price: item.price,
-                        desc: item.desc,
                         category: item.category,
                         is_visible: item.is_visible
                     };
                 });
 
+                if (skeleton) skeleton.remove(); // Drop the skeleton component cleanly
                 renderMenu();
             } catch (err) {
                 console.error(err);
-                container.innerHTML = `
-                    <div class="bg-red-950/30 border border-red-500/20 text-red-400 p-4 rounded-xl text-center text-xs font-medium">
-                        ⚠️ Network connection failed. Could not sync with local ThinkPad backend matrix.
-                    </div>
-                `;
+                if (skeleton) {
+                    skeleton.innerHTML = `
+                        <div class="bg-red-950/30 border border-red-500/20 text-red-400 p-4 rounded-xl text-center text-xs font-medium">
+                            ⚠️ Network connection failed. Could not sync with local ThinkPad backend matrix.
+                        </div>
+                    `;
+                }
             }
         }
 
-        // 3. Render Menu pipeline matching visibility states (Descriptions Removed)
+        // 3. Render Categorized Menu Pipeline (No Descriptions)
         function renderMenu() {
-            const container = document.getElementById("menu-container");
-            container.innerHTML = ""; 
+            const categories = ["Lunch", "Snacks", "Drinks"];
             
+            // Clear existing elements in all category grid frameworks out of view bounds
+            categories.forEach(cat => {
+                document.getElementById(`grid-${cat}`).innerHTML = "";
+                document.getElementById(`section-${cat}`).classList.add("hidden");
+            });
+
+            let activeCounts = { Lunch: 0, Snacks: 0, Drinks: 0 };
+
             Object.keys(menuData).forEach(id => {
                 const item = menuData[id];
                 
                 // CRITICAL RULE ENFORCEMENT: Skip generating hidden menu items entirely
                 if (item.is_visible === false) return; 
 
+                const targetGrid = document.getElementById(`grid-${item.category}`);
+                if (!targetGrid) return;
+
                 const card = document.createElement("div");
                 card.className = "bg-slate-800/60 border border-slate-800 rounded-2xl p-4 flex justify-between items-center gap-4 hover:border-slate-700/80 transition-colors";
                 card.innerHTML = `
                     <div class="space-y-1.5">
-                        <div class="flex items-center gap-2">
-                            <h3 class="font-bold text-slate-100">${item.name}</h3>
-                            <span class="text-[9px] bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded font-mono border border-slate-800">${item.category}</span>
-                        </div>
+                        <h3 class="font-bold text-slate-100">${item.name}</h3>
                         <p class="text-emerald-400 font-mono font-semibold text-sm">₹${item.price.toFixed(2)}</p>
                     </div>
                     <div id="btn-target-${id}">
@@ -156,7 +186,16 @@
                         </button>
                     </div>
                 `;
-                container.appendChild(card);
+                
+                targetGrid.appendChild(card);
+                activeCounts[item.category]++;
+            });
+
+            // Make a section block visible only if it contains active items
+            categories.forEach(cat => {
+                if (activeCounts[cat] > 0) {
+                    document.getElementById(`section-${cat}`).classList.remove("hidden");
+                }
             });
         }
 
@@ -224,6 +263,7 @@
             }
         }
 
+        // Toggle layout classes
         function toggleCartSheet() {
             const sheet = document.getElementById("cart-sheet");
             sheet.classList.toggle("translate-y-full");
