@@ -74,73 +74,77 @@
 
         // 2. Transmit Final State Settlement to PostgreSQL
         async function verifyAndComplete(orderId) {
-            const display = document.getElementById("order-display");
-            
-            try {
-                const response = await fetch(`${API_BASE}/admin/verify`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ order_id: orderId })
-                });
+        const display = document.getElementById("order-display");
+        
+        try {
+            const response = await fetch(`${API_BASE}/admin/verify`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ order_id: orderId })
+            });
 
-                const data = await response.json();
-
-                display.classList.remove("hidden");
-
-                if (!response.ok) {
-                    // This handles cases where order is already claimed or expired
-                    display.innerHTML = `
-                        <div class="bg-red-950/40 border border-red-500/30 rounded-2xl p-6 text-center space-y-2">
-                            <div class="text-3xl">⚠️</div>
-                            <h3 class="text-lg font-bold text-red-400">Verification Rejected</h3>
-                            <p class="text-sm text-slate-300 font-medium px-2">${data.detail || "Error process execution"}</p>
-                        </div>
-                    `;
-                    return;
+            // 1. Check if the server actually returned a clean response status first
+            if (!response.ok) {
+                let errorMessage = "An error occurred on the server pipeline.";
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.detail || errorMessage;
+                } catch (e) {
+                    // Server responded with plain text instead of JSON (like a 404 or 500 HTML page)
+                    errorMessage = `Server Error Status: ${response.status}`;
                 }
 
-                // Success validation payload layout generation
-                let itemsHtml = data.order_details.items.map(item => `
-                    <div class="flex justify-between items-center border-b border-slate-800/60 pb-2 text-sm">
-                        <span class="text-slate-200 font-medium">${item.name}</span>
-                        <span class="bg-slate-800 text-amber-400 px-3 py-0.5 rounded font-mono font-bold">x${item.quantity}</span>
-                    </div>
-                `).join('');
-
+                display.classList.remove("hidden");
                 display.innerHTML = `
-                    <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-5 space-y-4 shadow-xl">
-                        <div class="flex justify-between items-start border-b border-slate-800 pb-3">
-                            <div>
-                                <span class="bg-emerald-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">VERIFIED & PAID</span>
-                                <h3 class="text-xl font-bold mt-1">Order #${data.order_details.order_id}</h3>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-xs text-slate-400">Total Collected</p>
-                                <p class="text-lg font-mono font-bold text-emerald-400">₹${data.order_details.total_amount.toFixed(2)}</p>
-                            </div>
-                        </div>
-
-                        <div class="space-y-2">
-                            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Dispense Payload:</p>
-                            <div class="space-y-2.5 pt-1">
-                                ${itemsHtml}
-                            </div>
-                        </div>
-
-                        <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center text-xs font-medium text-emerald-400">
-                            ✓ Database state marked COMPLETED. Hand over food items now.
-                        </div>
+                    <div class="bg-red-950/40 border border-red-500/30 rounded-2xl p-6 text-center space-y-2">
+                        <div class="text-3xl">⚠️</div>
+                        <h3 class="text-lg font-bold text-red-400">Verification Rejected</h3>
+                        <p class="text-sm text-slate-300 font-medium px-2">${errorMessage}</p>
                     </div>
                 `;
-
-                // Clear input line for next fast-paced scan entry cycle
-                document.getElementById("scan-input").value = "";
-
-            } catch (err) {
-                console.error(err);
-                alert("Failed to clear authorization layer.");
+                return;
             }
+
+            // 2. If response is successful, parse the JSON payload safely
+            const data = await response.json();
+            display.classList.remove("hidden");
+
+            let itemsHtml = data.order_details.items.map(item => `
+                <div class="flex justify-between items-center border-b border-slate-800/60 pb-2 text-sm">
+                    <span class="text-slate-200 font-medium">${item.name}</span>
+                    <span class="bg-slate-800 text-amber-400 px-3 py-0.5 rounded font-mono font-bold">x${item.quantity}</span>
+                </div>
+            `).join('');
+
+            display.innerHTML = `
+                <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-5 space-y-4 shadow-xl">
+                    <div class="flex justify-between items-start border-b border-slate-800 pb-3">
+                        <div>
+                            <span class="bg-emerald-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wide uppercase">VERIFIED & PAID</span>
+                            <h3 class="text-xl font-bold mt-1">Order #${data.order_details.order_id}</h3>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-slate-400">Total Collected</p>
+                            <p class="text-lg font-mono font-bold text-emerald-400">₹${data.order_details.total_amount.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Dispense Payload:</p>
+                        <div class="space-y-2.5 pt-1">${itemsHtml}</div>
+                    </div>
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center text-xs font-medium text-emerald-400">
+                        ✓ Database state marked COMPLETED. Hand over food items now.
+                    </div>
+                </div>
+            `;
+
+            document.getElementById("scan-input").value = "";
+
+        } catch (err) {
+            console.error("Network crash details:", err);
+            alert(`Network Connection Failed: ${err.message}. Check your console logs!`);
         }
+    }
     </script>
 </body>
 </html>
