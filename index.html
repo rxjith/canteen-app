@@ -43,7 +43,7 @@
             </div>
             
             <div id="cart-items-list" class="space-y-2 max-h-36 overflow-y-auto mb-4 pr-1">
-                </div>
+            </div>
 
             <button onclick="triggerCheckout()" class="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] transition-transform text-slate-950 font-bold py-3.5 rounded-xl flex justify-between items-center px-4 shadow-lg shadow-emerald-500/10">
                 <span>Lock Stock & Request UPI Link</span>
@@ -65,6 +65,11 @@
                 <p class="text-xs text-slate-400 mt-1">Your items are secured for exactly 5 minutes.</p>
             </div>
             
+            <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-3 my-2">
+                <p class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Stock Reservation Window</p>
+                <div id="countdown-clock" class="text-2xl font-mono font-bold text-amber-400 mt-0.5">05:00</div>
+            </div>
+            
             <a id="payment-upi-link" href="#" class="block w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-lg shadow-amber-400/10">
                 💸 Launch UPI App (GPay/PhonePe)
             </a>
@@ -79,7 +84,7 @@
 
     <script>
         // 1. Core State Engine
-        const API_BASE = "http://127.0.0.1:8000/api"; // <-- Use YOUR actual local IP here
+        const API_BASE = "http://127.0.0.1:8000/api"; // <-- Set this to your local machine Wi-Fi IP when testing on mobile devices
         const USER_UUID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"; // Mock authenticated student
         
         // Static local cache matching database seed structure for immediate rendering
@@ -92,6 +97,7 @@
         };
 
         let cart = {}; // Tracks item_id -> quantity mappings
+        let countdownInterval = null; // Holds the live UI runtime interval thread
 
         // 2. Initialize UI components on load
         document.addEventListener("DOMContentLoaded", () => {
@@ -198,7 +204,6 @@
 
         // 4. Connects Client Side Event To FastAPI Server Thread via Fetch API
         async function triggerCheckout() {
-            // Build formal database-ready JSON body array structure mapping to Pydantic expectations
             const cartPayload = Object.keys(cart).map(id => ({
                 item_id: parseInt(id),
                 quantity: cart[id]
@@ -217,7 +222,6 @@
                 const data = await response.json();
 
                 if (!response.ok) {
-                    // Extract custom validation message thrown out of transaction lock statements
                     alert(data.detail || "Transaction pipeline error encountered.");
                     return;
                 }
@@ -227,7 +231,9 @@
                 document.getElementById("modal-total").innerText = `₹${data.total_amount.toFixed(2)}`;
                 document.getElementById("payment-upi-link").href = data.upi_url;
                 
-                // Open payment presentation layout
+                // Fire up the high-resolution countdown timer loop using server timestamp
+                startModalTimer(data.expires_at);
+
                 document.getElementById("payment-modal").classList.remove("hidden");
                 toggleCartSheet();
                 
@@ -237,7 +243,50 @@
             }
         }
 
+        // High-precision clock reconciliation
+        function startModalTimer(expiryIsoString) {
+            // Clear any running zombie timers out of background state bounds
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            const expiryTime = new Date(expiryIsoString).getTime();
+            const clockDisplay = document.getElementById("countdown-clock");
+            const upiButton = document.getElementById("payment-upi-link");
+
+            // Reset standard button active layout styles
+            clockDisplay.className = "text-2xl font-mono font-bold text-amber-400 mt-0.5";
+            upiButton.className = "block w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold py-3 rounded-xl transition-all shadow-lg shadow-amber-400/10 pointer-events-auto opacity-100";
+            upiButton.innerText = "💸 Launch UPI App (GPay/PhonePe)";
+
+            countdownInterval = setInterval(() => {
+                const now = new Date().getTime();
+                const distance = expiryTime - now;
+
+                // Time math calculations for minutes and seconds
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                // Format leading digits elegantly
+                const strMinutes = minutes < 10 ? "0" + minutes : minutes;
+                const strSeconds = seconds < 10 ? "0" + seconds : seconds;
+
+                clockDisplay.innerText = `${strMinutes}:${strSeconds}`;
+
+                // If reservation window closes, lock out the actions
+                if (distance < 0) {
+                    clearInterval(countdownInterval);
+                    clockDisplay.innerText = "00:00";
+                    clockDisplay.className = "text-2xl font-mono font-bold text-red-500 animate-pulse mt-0.5";
+                    
+                    // Freeze action interface pipeline 
+                    upiButton.innerText = "🚨 Hold Expired - Re-order Item";
+                    upiButton.className = "block w-full bg-slate-800 text-slate-500 font-bold py-3 rounded-xl cursor-not-allowed pointer-events-none";
+                }
+            }, 1000);
+        }
+
         function closeModal() {
+            if (countdownInterval) clearInterval(countdownInterval);
+            document.getElementById("countdown-clock").className = "text-2xl font-mono font-bold text-amber-400 mt-0.5";
             document.getElementById("payment-modal").classList.add("hidden");
             cart = {}; // Empty local application state memory bounds
             updateCartUI();
