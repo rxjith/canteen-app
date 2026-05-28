@@ -41,6 +41,16 @@
 
         <section id="order-display" class="hidden space-y-4">
             </section>
+        
+        <section class="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Inventory Stock Control</h2>
+                <p class="text-xs text-slate-500">Modify live PostgreSQL inventory allocations</p>
+            </div>
+
+            <div id="stock-control-grid" class="space-y-3">
+                </div>
+        </section>
 
     </main>
 
@@ -144,6 +154,80 @@
             alert(`Network Connection Failed: ${err.message}. Check your console logs!`);
         }
     }
+
+        // Reuse the static menu cache matching your index.html setup to generate the rows
+        function renderStockManagementGrid() {
+            const grid = document.getElementById("stock-control-grid");
+            grid.innerHTML = ""; // Clear existing elements
+
+            Object.keys(menuData).forEach(id => {
+                const item = menuData[id];
+                const row = document.createElement("div");
+                row.className = "flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-slate-800/80 gap-3";
+                
+                row.innerHTML = `
+                    <div class="flex-1">
+                        <p class="text-sm font-bold text-slate-200">${item.name}</p>
+                        <p class="text-xs text-emerald-400 font-mono">₹${item.price.toFixed(2)}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="stock-input-${id}" placeholder="Qty" min="0" value="50"
+                            class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-center text-slate-100 font-mono font-bold w-16 text-sm focus:outline-none focus:border-amber-500">
+                        <button onclick="commitStockUpdate(${id})" 
+                            class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-xs text-slate-200 font-semibold px-3 py-2 rounded-lg transition-all border border-slate-700">
+                            Push
+                        </button>
+                    </div>
+                `;
+                grid.appendChild(row);
+            });
+        }
+
+            // Fire HTTP PATCH request directly into PostgreSQL via FastAPI
+        async function commitStockUpdate(itemId) {
+            const stockInput = document.getElementById(`stock-input-${itemId}`);
+            const newStockValue = parseInt(stockInput.value);
+
+            if (isNaN(newStockValue) || newStockValue < 0) {
+                return alert("Please enter a valid stock integer count.");
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/stock`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        item_id: itemId,
+                        new_stock: newStockValue
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert(data.detail || "Failed to commit stock transaction logic limits.");
+                    return;
+                }
+
+                // Temporary confirmation highlight effect
+                stockInput.classList.remove("border-slate-700");
+                stockInput.classList.add("border-emerald-500", "text-emerald-400");
+                
+                setTimeout(() => {
+                    stockInput.classList.remove("border-emerald-500", "text-emerald-400");
+                    stockInput.classList.add("border-slate-700");
+                }, 1500);
+
+            } catch (err) {
+                console.error(err);
+                alert("Network communication barrier encountered while writing stock metrics.");
+            }
+        }
+
+        // Make sure to call the initialization function on page load!
+        document.addEventListener("DOMContentLoaded", () => {
+            renderStockManagementGrid();
+        });
     </script>
 </body>
 </html>

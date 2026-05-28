@@ -209,3 +209,33 @@ async def verify_and_complete_order(request: VerifyOrderRequest, conn=Depends(ge
                 "items": item_list
             }
         }
+        
+class StockUpdateRequest(BaseModel):
+    item_id: int
+    new_stock: int
+    
+@app.patch("/api/admin/stock")
+async def update_stock(payload: StockUpdateRequest):
+    # Connect to your PostgreSQL connection pool
+    async with app.state.db_pool.acquire() as connection:
+        # Execute atomic update statement
+        query = """
+            UPDATE menu_items 
+            SET stock = $1 
+            WHERE id = $2 
+            RETURNING id, name, stock;
+        """
+        result = await connection.fetchrow(query, payload.new_stock, payload.item_id)
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Menu item not found in database pipeline.")
+            
+        return {
+            "status": "success",
+            "message": f"Stock updated successfully for {result['name']}",
+            "updated_item": {
+                "id": result['id'],
+                "name": result['name'],
+                "current_stock": result['stock']
+            }
+        }
