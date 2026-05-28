@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canteen Admin | Clear Pipeline</title>
+    <title>Canteen Admin | Core Control Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen">
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-12">
 
     <nav class="bg-slate-950 border-b border-slate-800 px-4 py-4 sticky top-0 z-50">
         <div class="max-w-md mx-auto flex justify-between items-center">
@@ -26,7 +26,7 @@
         <section class="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
             <div>
                 <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Scan Token Entry</h2>
-                <p class="text-xs text-slate-500">Simulates physical QR code hardware input decode</p>
+                <p class="text-xs text-slate-500">Simulates physical QR code hardware inputs</p>
             </div>
             
             <div class="flex gap-2">
@@ -40,33 +40,216 @@
         </section>
 
         <section id="order-display" class="hidden space-y-4"></section>
+
+        <section class="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Add New Menu Item</h2>
+                <p class="text-xs text-slate-500">Register new dishes directly into production storage</p>
+            </div>
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="text" id="new-item-name" placeholder="Item Name (e.g., Porotta)" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                    <input type="number" id="new-item-price" placeholder="Price (₹)" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <select id="new-item-category" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-400 focus:outline-none focus:border-amber-500">
+                        <option value="Lunch">Lunch Pipeline</option>
+                        <option value="Snacks">Snacks Pipeline</option>
+                        <option value="Drinks">Drinks Pipeline</option>
+                    </select>
+                    <input type="number" id="new-item-stock" placeholder="Initial Stock Count" class="bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                </div>
+                <input type="text" id="new-item-desc" placeholder="Brief Item Description Field" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                <button onclick="commitNewItemToServer()" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-2.5 rounded-xl text-xs text-slate-950 active:scale-[0.98] transition-all">
+                    ➕ Deploy Item Onto Live System
+                </button>
+            </div>
+        </section>
         
         <section class="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
             <div>
-                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Inventory Stock Control</h2>
-                <p class="text-xs text-slate-500">Modify live PostgreSQL inventory allocations</p>
+                <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Live Inventory Stock & Price Engine</h2>
+                <p class="text-xs text-slate-500">Modify structural database allocations on the fly</p>
             </div>
 
-            <div id="stock-control-grid" class="space-y-3"></div>
+            <div class="space-y-6">
+                <div>
+                    <h3 class="text-xs font-bold text-amber-500/80 tracking-widest uppercase mb-2 border-b border-slate-800/60 pb-1">🍱 Lunch</h3>
+                    <div id="grid-Lunch" class="space-y-3"></div>
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-amber-500/80 tracking-widest uppercase mb-2 border-b border-slate-800/60 pb-1">🍿 Snacks</h3>
+                    <div id="grid-Snacks" class="space-y-3"></div>
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold text-amber-500/80 tracking-widest uppercase mb-2 border-b border-slate-800/60 pb-1">🥤 Drinks</h3>
+                    <div id="grid-Drinks" class="space-y-3"></div>
+                </div>
+            </div>
         </section>
 
     </main>
 
     <script>
-        // 1. Core Environment Architecture Properties
+        // Use the EXACT same Wi-Fi IP address you looked up earlier for your ThinkPad!
         const API_BASE = "http://192.168.1.36:8000/api";
         let currentActiveOrderId = null;
 
-        // Static local reference dataset matching backend relational entities
+        // Master local cache updated with your actual canteen prices and items
         const menuData = {
-            1: { name: "Chicken Biriyani", price: 120.00 },
-            2: { name: "Veg Fried Rice", price: 80.00 },
-            3: { name: "Samosa", price: 15.00 },
-            4: { name: "Masala Chai", price: 12.00 },
-            5: { name: "Cold Coffee", price: 40.00 }
+            1: { name: "Fried Rice with Chicken Curry", price: 150.00, category: "Lunch", is_visible: true },
+            2: { name: "Fried Rice with Chilli Chicken", price: 150.00, category: "Lunch", is_visible: true },
+            3: { name: "Meals", price: 60.00, category: "Lunch", is_visible: true },
+            4: { name: "Omelette", price: 15.00, category: "Lunch", is_visible: true },
+            5: { name: "Chapati", price: 12.00, category: "Lunch", is_visible: true },
+            6: { name: "Porotta", price: 15.00, category: "Lunch", is_visible: true },
+            7: { name: "Egg Curry", price: 35.00, category: "Lunch", is_visible: true },
+            8: { name: "Chicken Curry", price: 75.00, category: "Lunch", is_visible: true },
+            9: { name: "Fish Curry", price: 65.00, category: "Lunch", is_visible: true },
+            
+            10: { name: "Meat Roll", price: 30.00, category: "Snacks", is_visible: true },
+            11: { name: "Egg Puffs", price: 15.00, category: "Snacks", is_visible: true },
+            12: { name: "Chicken Puffs", price: 20.00, category: "Snacks", is_visible: true },
+            13: { name: "Chicken Cutlet", price: 20.00, category: "Snacks", is_visible: true },
+            14: { name: "Chicken Sandwich", price: 35.00, category: "Snacks", is_visible: true },
+            15: { name: "Veg. Sandwich", price: 30.00, category: "Snacks", is_visible: true },
+            16: { name: "Burger", price: 50.00, category: "Snacks", is_visible: true },
+            
+            17: { name: "Watermelon/Mint Juice", price: 40.00, category: "Drinks", is_visible: true }
         };
 
-        // 2. Query Backend Database for Order State
+        // 1. Initialize UI Elements On Startup
+        document.addEventListener("DOMContentLoaded", () => {
+            renderMasterInventoryPanel();
+        });
+
+        function renderMasterInventoryPanel() {
+            // Flush elements
+            document.getElementById("grid-Lunch").innerHTML = "";
+            document.getElementById("grid-Snacks").innerHTML = "";
+            document.getElementById("grid-Drinks").innerHTML = "";
+
+            Object.keys(menuData).forEach(id => {
+                const item = menuData[id];
+                const targetGrid = document.getElementById(`grid-${item.category}`);
+                
+                if (!targetGrid) return;
+
+                const card = document.createElement("div");
+                card.className = `bg-slate-900 p-3.5 rounded-xl border transition-all ${item.is_visible ? 'border-slate-800' : 'border-slate-950 opacity-45 bg-slate-950/30'}`;
+                
+                card.innerHTML = `
+                    <div class="flex flex-col gap-3">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-sm font-bold text-slate-100">${item.name}</p>
+                                <p class="text-[10px] text-slate-500 font-mono">Item DB ID: #${id}</p>
+                            </div>
+                            <button onclick="toggleVisibilityState(${id})" 
+                                class="text-[11px] px-2.5 py-1 rounded-md font-semibold transition-all ${item.is_visible ? 'bg-slate-800 text-slate-400 hover:text-red-400' : 'bg-amber-500 text-slate-950 font-bold'}">
+                                ${item.is_visible ? '👁️ Hide' : '✨ Show'}
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/40">
+                            <div class="flex gap-1.5 items-center">
+                                <input type="number" id="stock-input-${id}" placeholder="Stock" value="50"
+                                    class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono text-xs font-bold w-14 text-slate-100 focus:outline-none focus:border-amber-500">
+                                <button onclick="commitStockUpdate(${id})" class="bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-bold px-2 py-1 rounded-md border border-slate-700 flex-1">Stock</button>
+                            </div>
+                            <div class="flex gap-1.5 items-center">
+                                <input type="number" id="price-input-${id}" placeholder="Price" value="${item.price}"
+                                    class="bg-slate-950 border border-slate-700 rounded-lg px-1.5 py-1 text-center font-mono text-xs font-bold w-16 text-emerald-400 focus:outline-none focus:border-amber-500">
+                                <button onclick="commitPriceUpdate(${id})" class="bg-slate-800 hover:bg-slate-700 text-[10px] text-emerald-400 font-bold px-2 py-1 rounded-md border border-slate-700 flex-1">₹ Price</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                targetGrid.appendChild(card);
+            });
+        }
+
+        // 2. Commit Live Price Updates
+        async function commitPriceUpdate(itemId) {
+            const priceField = document.getElementById(`price-input-${itemId}`);
+            const updatedPrice = parseFloat(priceField.value);
+
+            if (isNaN(updatedPrice) || updatedPrice < 0) return alert("Enter a valid price parameter.");
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/price`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ item_id: itemId, new_price: updatedPrice })
+                });
+
+                if (!response.ok) throw new Error();
+                
+                menuData[itemId].price = updatedPrice;
+                triggerControlSuccessFeedback(priceField);
+            } catch (err) {
+                alert("Could not commit new price mapping to backend.");
+            }
+        }
+
+        // 3. Toggle Visibility Flag
+        async function toggleVisibilityState(itemId) {
+            const currentVisibilityState = menuData[itemId].is_visible;
+            const targetState = !currentVisibilityState;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/visibility`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ item_id: itemId, is_visible: targetState })
+                });
+
+                if (!response.ok) throw new Error();
+                
+                menuData[itemId].is_visible = targetState;
+                renderMasterInventoryPanel(); 
+            } catch (err) {
+                alert("Database transmission failure updating item visibility states.");
+            }
+        }
+
+        // 4. Create and Deploy Brand New Menu Entity
+        async function commitNewItemToServer() {
+            const name = document.getElementById("new-item-name").value;
+            const price = parseFloat(document.getElementById("new-item-price").value);
+            const category = document.getElementById("new-item-category").value;
+            const stock = parseInt(document.getElementById("new-item-stock").value);
+            const desc = document.getElementById("new-item-desc").value || "Fresh kitchen product pipeline addition.";
+
+            if (!name || isNaN(price) || isNaN(stock)) return alert("Please fill out Name, Price, and Stock parameters.");
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/menu`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, price, desc, category, stock })
+                });
+
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                
+                // Track item internally in memory state dynamically
+                menuData[data.item.id] = { name: data.item.name, price: data.item.price, category: category, is_visible: true };
+                
+                // Reset inputs and redraw grids
+                document.getElementById("new-item-name").value = "";
+                document.getElementById("new-item-price").value = "";
+                document.getElementById("new-item-stock").value = "";
+                document.getElementById("new-item-desc").value = "";
+                
+                renderMasterInventoryPanel();
+                alert(`Successfully deployed item entry: ${data.item.name}`);
+            } catch (err) {
+                alert("Failed to write new parameters into database framework logs.");
+            }
+        }
+
+        // 5. Query Backend Database for Order State
         async function fetchOrderDetails() {
             const orderId = document.getElementById("scan-input").value;
             if (!orderId) return alert("Please enter or scan a valid Order ID.");
@@ -82,7 +265,7 @@
             }
         }
 
-        // 3. Transmit Final State Settlement to PostgreSQL
+        // 6. Transmit Final State Settlement to PostgreSQL
         async function verifyAndComplete(orderId) {
             const display = document.getElementById("order-display");
             
@@ -153,35 +336,7 @@
             }
         }
 
-        // 4. Render Inventory Rows from Menu Definition
-        function renderStockManagementGrid() {
-            const grid = document.getElementById("stock-control-grid");
-            grid.innerHTML = ""; 
-
-            Object.keys(menuData).forEach(id => {
-                const item = menuData[id];
-                const row = document.createElement("div");
-                row.className = "flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-slate-800/80 gap-3";
-                
-                row.innerHTML = `
-                    <div class="flex-1">
-                        <p class="text-sm font-bold text-slate-200">${item.name}</p>
-                        <p class="text-xs text-emerald-400 font-mono">₹${item.price.toFixed(2)}</p>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="stock-input-${id}" placeholder="Qty" min="0" value="50"
-                            class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-center text-slate-100 font-mono font-bold w-16 text-sm focus:outline-none focus:border-amber-500">
-                        <button onclick="commitStockUpdate(${id})" 
-                            class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-xs text-slate-200 font-semibold px-3 py-2 rounded-lg transition-all border border-slate-700">
-                            Push
-                        </button>
-                    </div>
-                `;
-                grid.appendChild(row);
-            });
-        }
-
-        // 5. Fire Transmissions into Database Pipeline
+        // 7. Fire Stock Transmissions into Database Pipeline
         async function commitStockUpdate(itemId) {
             const stockInput = document.getElementById(`stock-input-${itemId}`);
             const newStockValue = parseInt(stockInput.value);
@@ -200,21 +355,8 @@
                     })
                 });
 
-                const data = await response.json();
-
-                if (!response.ok) {
-                    alert(data.detail || "Failed to commit stock transaction logic limits.");
-                    return;
-                }
-
-                // Success highlight transition confirmation rule
-                stockInput.classList.remove("border-slate-700");
-                stockInput.classList.add("border-emerald-500", "text-emerald-400");
-                
-                setTimeout(() => {
-                    stockInput.classList.remove("border-emerald-500", "text-emerald-400");
-                    stockInput.classList.add("border-slate-700");
-                }, 1500);
+                if (!response.ok) throw new Error();
+                triggerControlSuccessFeedback(stockInput);
 
             } catch (err) {
                 console.error(err);
@@ -222,10 +364,15 @@
             }
         }
 
-        // Page Initialization Core Hooks
-        document.addEventListener("DOMContentLoaded", () => {
-            renderStockManagementGrid();
-        });
+        function triggerControlSuccessFeedback(inputTargetElement) {
+            inputTargetElement.classList.remove("border-slate-700");
+            inputTargetElement.classList.add("border-emerald-500", "text-emerald-400");
+            
+            setTimeout(() => {
+                inputTargetElement.classList.remove("border-emerald-500", "text-emerald-400");
+                inputTargetElement.classList.add("border-slate-700");
+            }, 1200);
+        }
     </script>
 </body>
 </html>
