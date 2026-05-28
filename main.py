@@ -154,6 +154,7 @@ async def checkout(request: CheckoutRequest, conn=Depends(get_db)):
             "message": "Stock locked for 5 minutes. Proceed to payment.",
             "order_id": order_id,
             "total_amount": total_amount,
+            "expires_at": expires_at.isoformat(),
             "upi_url": upi_url
         }
         
