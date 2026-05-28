@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 DB_CONFIG = {
     "database": "canteen_db",
     "user": "canteen_admin",
-    "password": "sjcetcanteen1$$$",  # <-- Keep your real password here
+    "password": "sjcetcanteen1$$$",  # <-- Real password kept intact
     "host": "127.0.0.1",
     "port": "5432"
 }
@@ -68,7 +68,7 @@ app = FastAPI(title="Campus Canteen Warzone Engine", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows your local HTML file to communicate directly
+    allow_origins=["*"],  # Allows local / GitHub Pages HTML files to communicate directly
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,7 +82,7 @@ async def get_db():
     finally:
         await conn.close()
 
-# Data validation models
+# --- INPUT VALIDATION REGISTRATION SCHEMAS ---
 class CartItem(BaseModel):
     item_id: int
     quantity: int
@@ -91,6 +91,31 @@ class CheckoutRequest(BaseModel):
     user_id: str
     cart: list[CartItem]
 
+class VerifyOrderRequest(BaseModel):
+    order_id: int
+
+class StockUpdateRequest(BaseModel):
+    item_id: int
+    new_stock: int
+
+class PriceUpdateRequest(BaseModel):
+    item_id: int
+    new_price: float
+
+class VisibilityUpdateRequest(BaseModel):
+    item_id: int
+    is_visible: bool
+
+class NewItemRequest(BaseModel):
+    name: str
+    price: float
+    desc: str
+    category: str  # 'Lunch', 'Snacks', 'Drinks'
+    stock: int
+
+
+# --- CORE TRANSACTION PIPELINE ENDPOINTS ---
+
 @app.post("/api/checkout")
 async def checkout(request: CheckoutRequest, conn=Depends(get_db)):
     async with conn.transaction():
@@ -98,13 +123,17 @@ async def checkout(request: CheckoutRequest, conn=Depends(get_db)):
         order_items_to_create = []
 
         for cart_item in request.cart:
+            # Reconciling with check for item visibility settings
             item = await conn.fetchrow(
-                "SELECT name, price, current_stock FROM menu_items WHERE item_id = $1 FOR UPDATE",
+                "SELECT name, price, current_stock, is_visible FROM menu_items WHERE item_id = $1 FOR UPDATE",
                 cart_item.item_id
             )
 
             if not item:
                 raise HTTPException(status_code=404, detail=f"Item ID {cart_item.item_id} not found")
+
+            if not item['is_visible']:
+                raise HTTPException(status_code=400, detail=f"Item {item['name']} is currently out of rotation.")
 
             if item['current_stock'] < cart_item.quantity:
                 raise HTTPException(
@@ -157,14 +186,10 @@ async def checkout(request: CheckoutRequest, conn=Depends(get_db)):
             "expires_at": expires_at.isoformat(),
             "upi_url": upi_url
         }
-        
-class VerifyOrderRequest(BaseModel):
-    order_id: int
 
 @app.post("/api/admin/verify")
 async def verify_and_complete_order(request: VerifyOrderRequest, conn=Depends(get_db)):
     async with conn.transaction():
-        # 1. Fetch the order and lock it for status updates
         order = await conn.fetchrow(
             "SELECT status, total_amount FROM orders WHERE order_id = $1 FOR UPDATE",
             request.order_id
@@ -173,14 +198,12 @@ async def verify_and_complete_order(request: VerifyOrderRequest, conn=Depends(ge
         if not order:
             raise HTTPException(status_code=404, detail=f"Order #{request.order_id} not found.")
 
-        # 2. Check current status safety rules
         if order['status'] == 'completed':
             raise HTTPException(status_code=400, detail="Security Alert: This food token has ALREADY been claimed!")
         
         if order['status'] == 'expired':
             raise HTTPException(status_code=400, detail="Order Expired! Stock was already released back to inventory.")
 
-        # 3. Fetch the actual food items inside this order so staff knows what to hand over
         items = await conn.fetch(
             """
             SELECT m.name, oi.quantity 
@@ -191,10 +214,8 @@ async def verify_and_complete_order(request: VerifyOrderRequest, conn=Depends(ge
             request.order_id
         )
 
-        # Format items into a friendly list for the staff UI dashboard
         item_list = [{"name": item['name'], "quantity": item['quantity']} for item in items]
 
-        # 4. Officially complete the order
         await conn.execute(
             "UPDATE orders SET status = 'completed' WHERE order_id = $1",
             request.order_id
@@ -209,23 +230,20 @@ async def verify_and_complete_order(request: VerifyOrderRequest, conn=Depends(ge
                 "items": item_list
             }
         }
-        
-class StockUpdateRequest(BaseModel):
-    item_id: int
-    new_stock: int
-    
+
+
+# --- ADMINISTRATIVE CONTENT CONTROL ENDPOINTS ---
+
 @app.patch("/api/admin/stock")
-async def update_stock(payload: StockUpdateRequest):
-    # Connect to your PostgreSQL connection pool
-    async with app.state.db_pool.acquire() as connection:
-        # Execute atomic update statement
+async def update_stock(payload: StockUpdateRequest, conn=Depends(get_db)):
+    async with conn.transaction():
         query = """
             UPDATE menu_items 
-            SET stock = $1 
-            WHERE id = $2 
-            RETURNING id, name, stock;
+            SET current_stock = $1 
+            WHERE item_id = $2 
+            RETURNING item_id, name, current_stock;
         """
-        result = await connection.fetchrow(query, payload.new_stock, payload.item_id)
+        result = await conn.fetchrow(query, payload.new_stock, payload.item_id)
         
         if not result:
             raise HTTPException(status_code=404, detail="Menu item not found in database pipeline.")
@@ -234,8 +252,79 @@ async def update_stock(payload: StockUpdateRequest):
             "status": "success",
             "message": f"Stock updated successfully for {result['name']}",
             "updated_item": {
-                "id": result['id'],
+                "id": result['item_id'],
                 "name": result['name'],
-                "current_stock": result['stock']
+                "current_stock": result['current_stock']
+            }
+        }
+
+@app.patch("/api/admin/price")
+async def update_price(payload: PriceUpdateRequest, conn=Depends(get_db)):
+    async with conn.transaction():
+        query = """
+            UPDATE menu_items 
+            SET price = $1 
+            WHERE item_id = $2 
+            RETURNING item_id, name, price;
+        """
+        result = await conn.fetchrow(query, payload.new_price, payload.item_id)
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Menu item not found in database pipeline.")
+            
+        return {
+            "status": "success",
+            "message": f"Price updated successfully for {result['name']}",
+            "updated_item": {
+                "id": result['item_id'],
+                "name": result['name'],
+                "price": float(result['price'])
+            }
+        }
+
+@app.patch("/api/admin/visibility")
+async def update_visibility(payload: VisibilityUpdateRequest, conn=Depends(get_db)):
+    async with conn.transaction():
+        query = """
+            UPDATE menu_items 
+            SET is_visible = $1 
+            WHERE item_id = $2 
+            RETURNING item_id, name, is_visible;
+        """
+        result = await conn.fetchrow(query, payload.is_visible, payload.item_id)
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Menu item not found in database pipeline.")
+            
+        return {
+            "status": "success",
+            "message": f"Visibility updated successfully for {result['name']}",
+            "updated_item": {
+                "id": result['item_id'],
+                "name": result['name'],
+                "is_visible": result['is_visible']
+            }
+        }
+
+@app.post("/api/admin/menu")
+async def create_menu_item(payload: NewItemRequest, conn=Depends(get_db)):
+    async with conn.transaction():
+        query = """
+            INSERT INTO menu_items (name, price, description, category, current_stock, is_visible)
+            VALUES ($1, $2, $3, $4, $5, true)
+            RETURNING item_id, name, price, current_stock;
+        """
+        result = await conn.fetchrow(
+            query, payload.name, payload.price, payload.desc, payload.category, payload.stock
+        )
+        
+        return {
+            "status": "success",
+            "message": "Item successfully appended onto database matrix records.",
+            "item": {
+                "id": result['item_id'],
+                "name": result['name'],
+                "price": float(result['price']),
+                "current_stock": result['current_stock']
             }
         }
