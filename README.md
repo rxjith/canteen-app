@@ -1,6 +1,8 @@
 # Campus Crunch 🍔🕒
+#### Video Demo:  <[URL HERE](https://youtu.be/pvb9rkoh_qI)>
 
-**Campus Crunch** is a real-time canteen ordering web application built to solve a major problem we face in Indian colleges: massive rush-hour lines, and ordering food only to find out it *just* ran out at the counter. 
+#### Description:
+**Campus Crunch** is a real-time canteen ordering web application built to solve a major problem we face in Indian colleges: massive rush-hour lines, and ordering food only to find out it *just* ran out at the counter.
 
 This app connects students directly to the kitchen inventory in real time. It ensures that students can only buy what is actually available, and it locks down the stock automatically the moment an order is started so nobody else can steal your food while you pay.
 
@@ -36,4 +38,4 @@ When handling food stock, we had to decide how to block double-orders. We chose 
 ### Short-Polling vs. WebSockets
 To make the student's screen turn green instantly when the admin clicks approve, we needed real-time communication. We chose **HTTP Short-Polling** (checking the server every 2.5 seconds) over persistent WebSockets. Since students are constantly walking around campus, moving between mobile data and college Wi-Fi, WebSockets would constantly drop and crash. Short-polling is incredibly lightweight, handles bad network signals easily, and never breaks the user experience on mobile browsers.
 
-<h5>This project was engineered with Gemini as a partner to help fix some bugs, but most of the code was written by me.<h5/> 
+<h5>This project was engineered with Gemini as a partner to help fix some bugs, but most of the code was written by me.<h5/>
