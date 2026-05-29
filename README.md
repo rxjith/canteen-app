@@ -35,3 +35,5 @@ When handling food stock, we had to decide how to block double-orders. We chose 
 
 ### Short-Polling vs. WebSockets
 To make the student's screen turn green instantly when the admin clicks approve, we needed real-time communication. We chose **HTTP Short-Polling** (checking the server every 2.5 seconds) over persistent WebSockets. Since students are constantly walking around campus, moving between mobile data and college Wi-Fi, WebSockets would constantly drop and crash. Short-polling is incredibly lightweight, handles bad network signals easily, and never breaks the user experience on mobile browsers.
+
+<h5>This project was engineered with Gemini as a partner to help fix some bugs, but most of the code was written by me.<h5/> 
