@@ -1,37 +1,37 @@
 # Campus Crunch 🍔🕒
 
-Hey! This is **Campus Crunch**, a real-time, independent canteen ordering ecosystem I built to fix the chaotic rush-hour mess we see in college canteens every single day. 
+**Campus Crunch** is a real-time canteen ordering web application built to solve a major problem we face in Indian colleges: massive rush-hour lines, and ordering food only to find out it *just* ran out at the counter. 
 
-If you've ever stood in a massive college line, ordered food, paid for it, and then got told at the counter that it *just* ran out—you know exactly why I built this. This app syncs live stock counts with a fast, atomic backend so overselling is physically impossible.
+This app connects students directly to the kitchen inventory in real time. It ensures that students can only buy what is actually available, and it locks down the stock automatically the moment an order is started so nobody else can steal your food while you pay.
 
 ---
 
 ## The Real-World Problems This Solves
 
-1. **The Phantom Stock Crash:** If two students try to click "Buy" on the very last plate of food at the exact same millisecond, standard apps mess up and take money from both. Campus Crunch instantly **freezes the stock** the moment you initiate checkout, reserving it safely for 5 minutes while you handle the payment.
-2. **The Counter Bottleneck:** Instead of forcing the canteen staff to constantly stare at a physical soundbox or a personal phone ledger during a rush, the admin panel handles validation with a secure, human-in-the-loop handshake that safely pushes real-time "Green Screen" completion tokens back to the student's phone.
+1. **The Phantom Stock Crash:** In standard apps, if two people click "Buy" on the very last plate of food at the exact same millisecond, the app accidentally takes money from both. Campus Crunch fixes this by instantly freezing the food item in the database during checkout, holding it for 5 minutes while the student pays.
+2. **The Counter Bottleneck:** Instead of making canteen workers scroll through their personal banking alerts or soundboxes during a rush, our system introduces a smart "visual handshake." The staff console explicitly tells the worker to check for payment, and once they confirm it, the student's phone instantly turns green to show their food token is verified.
 
 ---
 
-## Tech Stack I Used
+## File-by-File Breakdown
 
-I wanted something fast, lightweight, and highly concurrent to handle hundreds of hungry students hammering the server at the exact same time.
+The project is built split cleanly into three main files:
 
-### Frontend (The UI)
-* **HTML5 & Vanilla JavaScript (ES6+):** Handles the absolute core mechanics—cart states, dynamic countdown timers, and the real-time background short-polling engine.
-* **Tailwind CSS:** Used via CDN to keep the entire user interface highly responsive, mobile-first, and completely dark-themed so it looks like a native application on Android or iOS.
+### 1. `main.py` (The Backend Brain)
+Written in **FastAPI** (Python), this script acts as the traffic controller for the entire system. It connects directly to our database using **Asyncpg** to ensure it can handle hundreds of hungry students placing orders at the exact same time. It handles checking the stock, freezing items, updating order statuses, and serving data to both the student and admin panels.
 
-### Backend (The Brains)
-* **FastAPI (Python):** An incredibly fast, asynchronous web framework built for handling concurrent API routing without breaking a sweat.
-* **Uvicorn:** The high-performance ASGI server used to run and serve the FastAPI application.
+### 2. `index.html` (The Student App)
+This is the interface the student uses on their phone, designed beautifully with **HTML5** and **Tailwind CSS**. Built with simple, clean **Vanilla JavaScript**, it displays today's live menu, handles the shopping cart, and updates the checkout screen. It uses a small background checking loop (short-polling) to ask the server every 2.5 seconds if the order has been approved yet.
 
-### Database Layer (The Storage)
-* **PostgreSQL:** The core relational database management system. I chose Postgres specifically because it allows me to implement **Row-Level Database Locking** to freeze stock counts instantly.
-* **Asyncpg:** A blazing-fast, non-blocking asynchronous database interface library that lets Python communicate with Postgres simultaneously under heavy loads.
+### 3. `admin.html` (The Staff Panel)
+This is the dashboard running on the canteen counter screen. It allows the workers to quickly type in a student's Order ID to pull up their plate details. It also features live inventory controls, meaning the canteen manager can update food prices, add new dishes, or change stock levels on the fly, instantly changing what students see on their phones.
 
 ---
 
-## Core System Architecture
+## Why I Made These Design Choices
 
-* **The Checkout Lock:** When a student hits checkout, the FastAPI backend hits Postgres with a `FOR UPDATE` query on that item's row. The row locks, the stock checks out, and it's securely deducted before a payment screen is even generated. 
-* **The Real-Time Handshake:** While the user handles payment, their phone screen shows a yellow countdown clock. The second the canteen worker fetches the Order ID on `admin.html` and completes the check, the student's background polling script catches the database change. Within 2.5 seconds, the student's screen automatically snaps into a bright green verification token.
+### Database Locking vs. App Coding
+When handling food stock, we had to decide how to block double-orders. We chose **PostgreSQL Row-Level Locking** (`FOR UPDATE`) instead of managing it inside our Python code. By letting the database isolate and lock the exact row of the food item being purchased, the system is 100% accurate. Even if the backend expands or handles thousands of transactions at once, the database ensures a completely safe queue.
+
+### Short-Polling vs. WebSockets
+To make the student's screen turn green instantly when the admin clicks approve, we needed real-time communication. We chose **HTTP Short-Polling** (checking the server every 2.5 seconds) over persistent WebSockets. Since students are constantly walking around campus, moving between mobile data and college Wi-Fi, WebSockets would constantly drop and crash. Short-polling is incredibly lightweight, handles bad network signals easily, and never breaks the user experience on mobile browsers.
