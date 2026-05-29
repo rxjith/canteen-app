@@ -1,5 +1,5 @@
 # Campus Crunch 🍔🕒
-#### Video Demo:  <[URL HERE](https://youtu.be/pvb9rkoh_qI)>
+#### Video Demo:  <[Project Demo](https://youtu.be/pvb9rkoh_qI)>
 
 #### Description:
 **Campus Crunch** is a real-time canteen ordering web application built to solve a major problem we face in Indian colleges: massive rush-hour lines, and ordering food only to find out it *just* ran out at the counter.
